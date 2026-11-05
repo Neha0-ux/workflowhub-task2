@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from .models import WorkflowItem
+
 User = get_user_model()
 
 
@@ -14,3 +16,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
+
+
+class WorkflowItemSerializer(serializers.ModelSerializer):
+    owner = serializers.ReadOnlyField(source="owner.username")
+
+    class Meta:
+        model = WorkflowItem
+        fields = ("id", "owner", "title", "description", "status", "created_at", "updated_at")
+        read_only_fields = ("id", "owner", "created_at", "updated_at")
