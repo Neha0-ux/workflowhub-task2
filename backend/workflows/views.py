@@ -1,10 +1,11 @@
 from django.contrib.auth import authenticate
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import RegisterSerializer
+from .models import WorkflowItem
+from .serializers import RegisterSerializer, WorkflowItemSerializer
 
 
 class RegisterView(generics.CreateAPIView):
@@ -37,3 +38,19 @@ class LogoutView(APIView):
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class WorkflowItemViewSet(viewsets.ModelViewSet):
+    """Full CRUD on /api/workflows/, limited to the logged-in user's items."""
+
+    serializer_class = WorkflowItemSerializer
+
+    def get_queryset(self):
+        queryset = WorkflowItem.objects.filter(owner=self.request.user)
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
