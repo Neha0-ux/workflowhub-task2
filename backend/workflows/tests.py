@@ -1,0 +1,41 @@
+from django.contrib.auth import get_user_model
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+User = get_user_model()
+
+
+class AuthTests(APITestCase):
+    def test_register_login_logout(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {"username": "alice", "email": "alice@example.com", "password": "Str0ngPass!23"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("password", response.data)
+
+        response = self.client.post(
+            "/api/auth/login/", {"username": "alice", "password": "Str0ngPass!23"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        token = response.data["token"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = self.client.post("/api/auth/logout/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # The token was deleted, so it no longer works
+        response = self.client.post("/api/auth/logout/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_with_wrong_password_fails(self):
+        User.objects.create_user(username="bob", password="Str0ngPass!23")
+        response = self.client.post("/api/auth/login/", {"username": "bob", "password": "wrong"})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_duplicate_username_rejected(self):
+        User.objects.create_user(username="alice", password="Str0ngPass!23")
+        response = self.client.post(
+            "/api/auth/register/", {"username": "alice", "password": "Str0ngPass!23"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
