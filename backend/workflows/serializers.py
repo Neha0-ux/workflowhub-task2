@@ -50,7 +50,6 @@ class WorkflowItemSerializer(serializers.ModelSerializer):
                 f"Description must be {self.DESCRIPTION_MAX_LENGTH} characters or fewer."
             )
         return value
-
     def validate_status(self, value):
         if value not in self.ALLOWED_STATUSES:
             raise serializers.ValidationError(
