@@ -90,6 +90,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: render-deploy
+      cancel-in-progress: false
     steps:
       - name: Trigger Render deploys
         env:
