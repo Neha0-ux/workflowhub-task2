@@ -76,9 +76,9 @@ class WorkflowItemTests(APITestCase):
         self.assertFalse(WorkflowItem.objects.exists())
 
     def test_invalid_status_rejected(self):
-        response = self.client.post("/api/workflows/", {"title": "X", "status": "done"})
+        response = self.client.post("/api/workflows/", {"title": "Valid title", "status": "done"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
+        self.assertIn("status", response.data)
     def test_users_cannot_see_each_others_items(self):
         item = WorkflowItem.objects.create(owner=self.other, title="Bob's item")
         self.assertEqual(self.client.get("/api/workflows/").data, [])
@@ -107,17 +107,60 @@ class WorkflowItemSerializerValidationTests(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("title", serializer.errors)
 
-    def test_too_short_title_is_rejected(self):
+    def test_title_below_minimum_is_rejected(self):
         serializer = WorkflowItemSerializer(data=self.valid_data(title="ab"))
         self.assertFalse(serializer.is_valid())
         self.assertIn("title", serializer.errors)
 
-    def test_too_long_title_is_rejected(self):
-        serializer = WorkflowItemSerializer(data=self.valid_data(title="a" * 101))
+    def test_title_at_minimum_is_accepted(self):
+        serializer = WorkflowItemSerializer(data=self.valid_data(title="abc"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_title_at_maximum_is_accepted(self):
+        serializer = WorkflowItemSerializer(data=self.valid_data(title="a" * 200))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_title_above_maximum_is_rejected(self):
+        serializer = WorkflowItemSerializer(data=self.valid_data(title="a" * 201))
         self.assertFalse(serializer.is_valid())
         self.assertIn("title", serializer.errors)
 
-    def test_invalid_status_is_rejected(self):
+    def test_description_at_limit_is_accepted(self):
+        serializer = WorkflowItemSerializer(data=self.valid_data(description="a" * 500))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_description_over_limit_is_rejected(self):
+        serializer = WorkflowItemSerializer(data=self.valid_data(description="a" * 501))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("description", serializer.errors)
+
+    def test_invalid_status_uses_custom_message(self):
         serializer = WorkflowItemSerializer(data=self.valid_data(status="Done"))
         self.assertFalse(serializer.is_valid())
-        self.assertIn("status", serializer.errors)
+        self.assertEqual(
+            str(serializer.errors["status"][0]),
+            "Status must be one of: pending, in_progress, completed.",
+        )
+
+
+class WorkflowItemApiValidationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="carol", password="Str0ngPass!23")
+        self.client.force_authenticate(self.user)
+
+    def test_short_title_returns_400(self):
+        response = self.client.post("/api/workflows/", {"title": "ab"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("title", response.data)
+
+    def test_long_description_returns_400(self):
+        response = self.client.post(
+            "/api/workflows/", {"title": "Valid title", "description": "a" * 501}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("description", response.data)
+
+    def test_invalid_status_returns_clear_message(self):
+        response = self.client.post("/api/workflows/", {"title": "Valid title", "status": "done"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Status must be one of", str(response.data["status"][0]))
